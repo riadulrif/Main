@@ -1,0 +1,383 @@
+created by 
+
+ MOHAMMAD RIADUL ISLAM
+
+C/N 5619
+
+fore top
+
+
+
+
+
+
+
+
+config.php 
+
+
+<?php
+// config.php
+$servername = "localhost";
+$username = "root";
+$password = "";
+$dbname = "your_database_name";
+
+// Create connection
+$conn = new mysqli($servername, $username, $password, $dbname);
+
+// Check connection
+if ($conn->connect_error) {
+    die("Connection failed: " . $conn->connect_error);
+}
+?>
+
+
+
+************************************************************************************
+
+
+index.php
+
+
+
+<?php
+include 'config.php';
+
+// Pagination settings
+$results_per_page = 10; // Number of results per page
+
+// Get the current page number from URL, default to 1 if not set
+$page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
+
+// Get the search query from URL, default to empty if not set
+$search_query = isset($_GET['search']) ? $_GET['search'] : '';
+
+// Calculate the starting record of the current page
+$start_from = ($page - 1) * $results_per_page;
+
+// Prepare SQL query for total records with search functionality
+$sql_total = "SELECT COUNT(*) AS total FROM data WHERE name LIKE ? OR value LIKE ?";
+$stmt_total = $conn->prepare($sql_total);
+$search_term = "%$search_query%";
+$stmt_total->bind_param('ss', $search_term, $search_term);
+$stmt_total->execute();
+$result_total = $stmt_total->get_result();
+$total_rows = $result_total->fetch_assoc()['total'];
+$total_pages = ceil($total_rows / $results_per_page);
+
+// Prepare SQL query for fetching records with search functionality
+$sql = "SELECT * FROM data WHERE name LIKE ? OR value LIKE ? LIMIT ?, ?";
+$stmt = $conn->prepare($sql);
+$stmt->bind_param('ssii', $search_term, $search_term, $start_from, $results_per_page);
+$stmt->execute();
+$result = $stmt->get_result();
+?>
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Data Table</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container mt-4">
+        <h1 class="mb-4">Data Table</h1>
+
+        <!-- Search Form -->
+        <form method="get" action="index.php" class="mb-4">
+            <div class="input-group">
+                <input type="text" name="search" class="form-control" value="<?php echo htmlspecialchars($search_query); ?>" placeholder="Search..." />
+                <div class="input-group-append">
+                    <button class="btn btn-primary" type="submit">Search</button>
+                </div>
+            </div>
+        </form>
+
+        <!-- Table -->
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Name</th>
+                    <th>Value</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="data-table-body">
+                <?php
+                if ($result->num_rows > 0) {
+                    while ($row = $result->fetch_assoc()) {
+                        echo "<tr>
+                                <td>{$row['id']}</td>
+                                <td>{$row['name']}</td>
+                                <td>{$row['value']}</td>
+                                <td>
+                                    <a href='edit.php?id={$row['id']}' class='btn btn-warning btn-sm'>Edit</a>
+                                    <form action='delete.php' method='post' style='display:inline;'>
+                                        <input type='hidden' name='id' value='{$row['id']}'>
+                                        <button type='submit' class='btn btn-danger btn-sm'>Delete</button>
+                                    </form>
+                                </td>
+                            </tr>";
+                    }
+                }
+                ?>
+            </tbody>
+        </table>
+
+        <!-- Pagination Links -->
+        <nav aria-label="Page navigation">
+            <ul class="pagination">
+                <?php if ($page > 1): ?>
+                    <li class="page-item">
+                        <a class="page-link" href="index.php?page=<?php echo $page - 1; ?>&search=<?php echo urlencode($search_query); ?>">Previous</a>
+                    </li>
+                <?php endif; ?>
+
+                <?php for ($i = 1; $i <= $total_pages; $i++): ?>
+                    <li class="page-item <?php if ($i == $page) echo 'active'; ?>">
+                        <a class="page-link" href="index.php?page=<?php echo $i; ?>&search=<?php echo urlencode($search_query); ?>"><?php echo $i; ?></a>
+                    </li>
+                <?php endfor; ?>
+
+                <?php if ($page < $total_pages): ?>
+                    <li class="page-item">
+                        <a class="page-link" href="index.php?page=<?php echo $page + 1; ?>&search=<?php echo urlencode($search_query); ?>">Next</a>
+                    </li>
+                <?php endif; ?>
+            </ul>
+        </nav>
+
+        <!-- Button to open the modal -->
+        <button class="btn btn-primary" data-toggle="modal" data-target="#addModal">Add New</button>
+
+        <!-- Modal HTML -->
+        <div id="addModal" class="modal fade" tabindex="-1" role="dialog">
+            <div class="modal-dialog" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Add New Data</h5>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="addForm">
+                            <div class="form-group">
+                                <label for="name">Name</label>
+                                <input type="text" id="name" name="name" class="form-control" required />
+                            </div>
+                            <div class="form-group">
+                                <label for="value">Value</label>
+                                <input type="text" id="value" name="value" class="form-control" required />
+                            </div>
+                            <button type="submit" class="btn btn-primary">Save</button>
+                        </form>
+                        <div id="addMessage" class="alert mt-3" style="display:none;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- jQuery and Bootstrap JS -->
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <script>
+    // AJAX for form submission
+    $('#addForm').on('submit', function(e) {
+        e.preventDefault();
+        var formData = $(this).serialize();
+        $.ajax({
+            url: 'add.php',
+            type: 'POST',
+            data: formData,
+            success: function(response) {
+                $('#addMessage').removeClass('alert-danger').addClass('alert-success').text('Data added successfully!').show();
+                setTimeout(function() {
+                    $('#addMessage').hide();
+                    $('#addModal').modal('hide');
+                    location.reload(); // Reload the page to show the new data
+                }, 2000);
+            },
+            error: function() {
+                $('#addMessage').removeClass('alert-success').addClass('alert-danger').text('An error occurred. Please try again.').show();
+            }
+        });
+    });
+    </script>
+</body>
+</html>
+
+<?php $conn->close(); ?>
+
+
+**********************************************************************************************************************
+
+
+
+add.php 
+
+
+
+<?php
+include 'config.php';
+
+// Get POST data
+$name = $_POST['name'];
+$value = $_POST['value'];
+
+// Prepare and execute the SQL statement
+$sql = "INSERT INTO data (name, value) VALUES (?, ?)";
+$stmt = $conn->prepare($sql);
+$stmt->bind_param('ss', $name, $value);
+
+if ($stmt->execute()) {
+    echo json_encode(['status' => 'success']);
+} else {
+    echo json_encode(['status' => 'error', 'message' => $stmt->error]);
+}
+
+$stmt->close();
+$conn->close();
+?>
+
+
+
+
+**************************************************************************************************************
+
+
+
+edit.php 
+
+
+
+<?php
+include 'config.php';
+
+$id = $_GET['id'];
+
+if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    // Handle form submission
+    $name = $_POST['name'];
+    $value = $_POST['value'];
+    
+    $sql = "UPDATE data SET name = ?, value = ? WHERE id = ?";
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param('ssi', $name, $value, $id);
+    
+    if ($stmt->execute()) {
+        header('Location: index.php');
+        exit;
+    }
+}
+
+// Fetch the current data
+$sql = "SELECT * FROM data WHERE id = ?";
+$stmt = $conn->prepare($sql);
+$stmt->bind_param('i', $id);
+$stmt->execute();
+$result = $stmt->get_result();
+$data = $result->fetch_assoc();
+?>
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit Data</title>
+    <link href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container mt-4">
+        <h1>Edit Data</h1>
+        <form method="post">
+            <div class="form-group">
+                <label for="name">Name</label>
+                <input type="text" id="name" name="name" class="form-control" value="<?php echo htmlspecialchars($data['name']); ?>" required />
+            </div>
+            <div class="form-group">
+                <label for="value">Value</label>
+                <input type="text" id="value" name="value" class="form-control" value="<?php echo htmlspecialchars($data['value']); ?>" required />
+            </div>
+            <button type="submit" class="btn btn-primary">Save</button>
+        </form>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+</body>
+</html>
+
+<?php $conn->close(); ?>
+
+
+
+
+
+***************************************************************************************************************************
+
+
+
+
+delete.php 
+
+
+
+
+<?php
+include 'config.php';
+
+if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    $id = $_POST['id'];
+
+    $sql = "DELETE FROM data WHERE id = ?";
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param('i', $id);
+
+    if ($stmt->execute()) {
+        header('Location: index.php');
+        exit;
+    }
+}
+
+$conn->close();
+?>
+
+
+
+
+****************************************************************************************************************************
+
+
+
+citation 
+
+
+
+Summary
+config.php: Connects to the database.
+index.php: Displays the data table with search, pagination, and a modal for adding data.
+add.php: Handles AJAX requests to add new data.
+edit.php: Allows editing existing records.
+delete.php: Handles deletion of records.
+This setup provides a complete, interactive web application with improved user experience and a modern UI.
+
+
+
+created by 
+
+ MOHAMMAD RIADUL ISLAM
+
+C/N 5619
+
+fore top
+
